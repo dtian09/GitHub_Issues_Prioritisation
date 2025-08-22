@@ -2,7 +2,6 @@
 from datasets import load_dataset
 import pandas as pd
 import os
-from google.colab import userdata
 
 #cmd: export HF_TOKEN=token
 
