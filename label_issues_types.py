@@ -11,6 +11,7 @@ load_dotenv(override=True)
 
 # ==== Setup ====
 API_KEY = os.getenv("OPENAI_API_KEY")
+
 if not API_KEY:
     raise RuntimeError("Set OPENAI_API_KEY")
 

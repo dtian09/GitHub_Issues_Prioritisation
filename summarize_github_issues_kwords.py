@@ -5,6 +5,22 @@ import os, re, time, argparse
 import pandas as pd
 from tqdm import tqdm
 from openai import OpenAI
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
+
+API_KEY = os.getenv("OPENAI_API_KEY")
+
+if not API_KEY:
+    raise RuntimeError("Set OPENAI_API_KEY")
+
+client = OpenAI(api_key=API_KEY)
+
+# ----- Helpers -----
+# We still strip issue_start / issue_comment tags, but we DO NOT ignore issue_closed.
+START_COMMENT_TAGS = re.compile(r"</?issue_start>|</?issue_comment>", re.IGNORECASE)
+CLOSED_TAG         = re.compile(r"</?issue_closed>", re.IGNORECASE)
+WORD_RE            = re.compile(r"\b[\w'-]+\b", re.UNICODE)
 
 # ----- Args & config -----
 def parse_args():
@@ -16,18 +32,6 @@ def parse_args():
     p.add_argument("--sleep", type=float, default=float(os.getenv("RATE_LIMIT_SLEEP", "0.5")), help="seconds between calls")
     p.add_argument("--temp", type=float, default=float(os.getenv("TEMPERATURE", "0.2")))
     return p.parse_args()
-
-API_KEY = os.getenv("OPENAI_API_KEY")
-if not API_KEY:
-    raise RuntimeError("Set OPENAI_API_KEY")
-
-client = OpenAI(api_key=API_KEY)
-
-# ----- Helpers -----
-# We still strip issue_start / issue_comment tags, but we DO NOT ignore issue_closed.
-START_COMMENT_TAGS = re.compile(r"</?issue_start>|</?issue_comment>", re.IGNORECASE)
-CLOSED_TAG         = re.compile(r"</?issue_closed>", re.IGNORECASE)
-WORD_RE            = re.compile(r"\b[\w'-]+\b", re.UNICODE)
 
 def extract_and_clean_issue(text: str):
     """
