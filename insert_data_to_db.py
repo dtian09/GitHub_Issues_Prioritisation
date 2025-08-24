@@ -14,8 +14,9 @@ STREAMING = True
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Insert issue_id and content to DB from Hugging Face dataset.")
-    parser.add_argument('--start', type=int, default=17614, help='Start index (default: 17614)')
-    parser.add_argument('--n', type=int, default=None, help='Number of issues to fetch (default: all)')
+    parser.add_argument('--start', type=int, default=25154, help='Start index (default: 25154)')
+    parser.add_argument('--n', type=int, default=1000000, help='Number of issues to fetch (default: 1000000)')
+    #parser.add_argument('--n', type=int, default=None, help='Number of issues to fetch (default: all)')
     return parser.parse_args()
 
 # ---------- MySQL Config ----------
@@ -70,11 +71,11 @@ def fetch_rows(start, n):
 
 # ---------- Insert into DB ----------
 def insert_issues_batch(cursor, batch):
+    # MySQL 8.0.20+ syntax (works on modern servers)
     sql = (
-        "INSERT INTO issue (issue_id, content) "
-        "VALUES (%s, %s) "
-        "ON DUPLICATE KEY UPDATE "
-        "content=VALUES(content)"
+        "INSERT INTO `issue` (`issue_id`, `content`) "
+        "VALUES (%s, %s) AS new "
+        "ON DUPLICATE KEY UPDATE `content` = new.`content`"
     )
     cursor.executemany(sql, batch)
 
