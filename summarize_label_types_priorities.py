@@ -5,6 +5,16 @@ from tqdm import tqdm
 from dotenv import load_dotenv
 from openai import OpenAI
 
+SUMMARIZE_GUARDRAILS = (
+    "Context: summaries will be used for type/priority classification.\n"
+    "Grounding Rules:\n"
+    "1) Use ONLY information present in the issue text; do NOT invent facts, error names, versions, or numbers.\n"
+    "2) Prefer paraphrasing over inference; do NOT guess causes, fixes, or impact unless explicitly stated.\n"
+    "3) If the text references code, logs, or links, refer to them GENERICALLY (e.g., 'stack trace shows error', 'code sample provided').\n"
+    "4) Exclude greetings, usernames, labels, and pleasantries. Keep it factual and concise.\n"
+    "5) Output plain text only, no lists or quotes. Cap at 40 words.\n"
+)
+
 load_dotenv(override=True)
 
 # -------------------- CLI --------------------
@@ -43,7 +53,11 @@ def clean_and_detect_closed(text: str):
 # -------------------- Summarize (40 words) --------------------
 def summarize_40w(raw_text: str, model: str, temperature: float) -> str:
     cleaned, is_closed = clean_and_detect_closed(raw_text)
-    sys = "You are a concise technical writing assistant for software issues."
+    sys = (
+        "You are a concise technical writing assistant for software issues. "
+        "Produce grounded, non-speculative summaries that strictly follow the rules below.\n\n"
+        + SUMMARIZE_GUARDRAILS
+    )    
     hint = " The issue is CLOSED; explicitly say it is closed." if is_closed else ""
     user = (
         f"Summarize the following GitHub issue in EXACTLY 40 words.{hint} "

@@ -1,11 +1,9 @@
-import os, re, csv, mysql.connector
+import os, re, mysql.connector
 from datasets import load_dataset
-import pandas as pd
 from tqdm import tqdm
 from dotenv import load_dotenv
-from summarize_label_types_priorities import summarize_40w, label_type, label_priority
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 load_dotenv(override=True)
 
@@ -13,14 +11,12 @@ load_dotenv(override=True)
 HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_TOKEN")
 SPLIT = "train"
 STREAMING = True
-def parse_args():
-    parser = argparse.ArgumentParser(description="Fetch and process GitHub issues from Hugging Face starting at a user-specified index.")
-    parser.add_argument('--start', type=int, default=7617, help='Start index (default: 7617)')
-    parser.add_argument('--n', type=int, default=10000, help='Number of issues to fetch (default: 10000)')
-    return parser.parse_args()
 
-MODEL = os.getenv("MODEL", "gpt-4o")
-TEMP = float(os.getenv("TEMPERATURE", "0.2"))
+def parse_args():
+    parser = argparse.ArgumentParser(description="Insert issue_id and content to DB from Hugging Face dataset.")
+    parser.add_argument('--start', type=int, default=17614, help='Start index (default: 17614)')
+    parser.add_argument('--n', type=int, default=None, help='Number of issues to fetch (default: all)')
+    return parser.parse_args()
 
 # ---------- MySQL Config ----------
 DB_HOST = os.getenv("DB_HOST", "localhost")
@@ -52,43 +48,38 @@ def fetch_rows(start, n):
         token=HF_TOKEN
     )
     rows = []
-    for i, ex in enumerate(tqdm(ds, desc=f"Fetching issues {start} to {start+n-1}")):
-        if i < start:
-            continue
-        if i >= start + n:
-            break
-        rows.append({
-            "issue_id": ex.get("issue_id"),
-            "content": clean_text(ex.get("content"))
-        })
+    if n is None:
+            for i, ex in enumerate(tqdm(ds, desc=f"Fetching all issues from {start}")):
+                if i < start:
+                    continue
+                rows.append({
+                    "issue_id": ex.get("issue_id"),
+                    "content": clean_text(ex.get("content"))
+                })
+    else:
+            for i, ex in enumerate(tqdm(ds, desc=f"Fetching issues {start} to {start+n-1}")):
+                if i < start:
+                    continue
+                if i >= start + n:
+                    break
+                rows.append({
+                    "issue_id": ex.get("issue_id"),
+                    "content": clean_text(ex.get("content"))
+                })
     return rows
 
-# ---------- Summarize, label, and insert into DB ----------
+# ---------- Insert into DB ----------
 def insert_issues_batch(cursor, batch):
     sql = (
-        "INSERT INTO issue (issue_id, content, summary, type, priority) "
-        "VALUES (%s, %s, %s, %s, %s) "
+        "INSERT INTO issue (issue_id, content) "
+        "VALUES (%s, %s) "
         "ON DUPLICATE KEY UPDATE "
-        "content=VALUES(content), summary=VALUES(summary), type=VALUES(type), priority=VALUES(priority)"
+        "content=VALUES(content)"
     )
     cursor.executemany(sql, batch)
 
 def process_row(row):
-    issue_id = row["issue_id"]
-    content = row["content"]
-    try:
-        summary = summarize_40w(content, MODEL, TEMP)
-    except Exception:
-        summary = ""
-    try:
-        type_ = label_type(summary, MODEL) if summary else ""
-    except Exception:
-        type_ = ""
-    try:
-        priority = label_priority(summary, MODEL) if summary else ""
-    except Exception:
-        priority = ""
-    return (issue_id, content, summary, type_, priority)
+    return (row["issue_id"], row["content"])
 
 def main():
     args = parse_args()
@@ -108,14 +99,13 @@ def main():
     batch = []
     with ThreadPoolExecutor(max_workers=8) as executor:
         future_to_row = {executor.submit(process_row, row): row for row in rows}
-        for future in tqdm(as_completed(future_to_row), total=len(rows), desc="Summarize + label + insert"):
+        for future in tqdm(as_completed(future_to_row), total=len(rows), desc="Insert to DB"):
             result = future.result()
             batch.append(result)
             if len(batch) >= batch_size:
                 insert_issues_batch(cursor, batch)
                 conn.commit()
                 batch = []
-        # Insert any remaining
         if batch:
             insert_issues_batch(cursor, batch)
             conn.commit()
