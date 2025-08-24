@@ -14,8 +14,8 @@ STREAMING = True
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Insert issue_id and content to DB from Hugging Face dataset.")
-    parser.add_argument('--start', type=int, default=25154, help='Start index (default: 25154)')
-    parser.add_argument('--n', type=int, default=1000000, help='Number of issues to fetch (default: 1000000)')
+    parser.add_argument('--start', type=int, default=31893, help='Start index (default: 31893)')
+    parser.add_argument('--n', type=int, default=100000, help='Number of issues to fetch (default: 100000)')
     #parser.add_argument('--n', type=int, default=None, help='Number of issues to fetch (default: all)')
     return parser.parse_args()
 
@@ -71,13 +71,20 @@ def fetch_rows(start, n):
 
 # ---------- Insert into DB ----------
 def insert_issues_batch(cursor, batch):
-    # MySQL 8.0.20+ syntax (works on modern servers)
     sql = (
         "INSERT INTO `issue` (`issue_id`, `content`) "
-        "VALUES (%s, %s) AS new "
-        "ON DUPLICATE KEY UPDATE `content` = new.`content`"
+        "VALUES (%s, %s) "
+        "ON DUPLICATE KEY UPDATE `content` = VALUES(`content`)"
     )
-    cursor.executemany(sql, batch)
+    try:
+        cursor.executemany(sql, batch)
+    except mysql.connector.Error as e:
+        print(f"[!] Batch insert failed: {e}")
+        for i, row in enumerate(batch):
+            try:
+                cursor.execute(sql, row)
+            except mysql.connector.Error as e2:
+                print(f"[!] Row {i} (issue_id={row[0]}) failed: {e2}")
 
 def process_row(row):
     return (row["issue_id"], row["content"])
