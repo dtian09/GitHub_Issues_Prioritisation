@@ -14,8 +14,8 @@ STREAMING = True
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Insert issue_id and content to DB from Hugging Face dataset.")
-    parser.add_argument('--start', type=int, default=31893, help='Start index (default: 31893)')
-    parser.add_argument('--n', type=int, default=100000, help='Number of issues to fetch (default: 100000)')
+    parser.add_argument('--start', type=int, default=1107285, help='Start index (default: 1107285)')
+    parser.add_argument('--n', type=int, default=500000, help='Number of issues to fetch (default: 500000)')
     #parser.add_argument('--n', type=int, default=None, help='Number of issues to fetch (default: all)')
     return parser.parse_args()
 
