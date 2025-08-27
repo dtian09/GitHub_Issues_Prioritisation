@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 import os, re, time, argparse, json
-from urllib import response
 import anthropic
+from groq import Groq
 import pandas as pd
 from tqdm import tqdm
 from dotenv import load_dotenv
-from openai import Client, OpenAI
+from openai import OpenAI
+import json
 
 #python summarize_label_types_priorities_single_issue_input.py --input issue_id_549374190.txt --output issue549374190_prediction.txt --log-cleaned
 
@@ -219,8 +220,7 @@ def summarize_40w(raw_text: str, model: str, temperature: float, client: OpenAI,
         chat.append(system(sys))
         chat.append(user(prompt))
         response = chat.sample()
-        print(response.content)
-        out = response.content
+        out = response.content        
     else:        
         resp = client.chat.completions.create(
         model=model,
@@ -230,6 +230,17 @@ def summarize_40w(raw_text: str, model: str, temperature: float, client: OpenAI,
         )
         out = (resp.choices[0].message.content or "").strip()
     return clamp_words(out, 40)
+
+def extract_predicted_value(text: str, key: str = "predicted_type") -> str:
+    """
+    Extracts a value from a JSON-like text string under a given key.
+    Returns 'Unknown' if parsing fails or key is missing.
+    """
+    try:
+        data = json.loads(text.strip())
+        return data.get(key, "Unknown")
+    except json.JSONDecodeError:
+        return "Unknown"
 
 def label_type(summary: str, model: str, client: OpenAI) -> str:
     prompt = f"""
@@ -252,13 +263,13 @@ Summary:
             temperature=0.0,
             messages=[{"role": "user", "content": parts}]
         )
-        return resp.content[0].text
+        return extract_predicted_value(resp.content[0].text,key="predicted_type")
     elif model == "grok-4":
         from xai_sdk.chat import user
         chat = client.chat.create(model=model, temperature=0)
         chat.append(user(prompt))
         response = chat.sample()
-        return response.content
+        return extract_predicted_value(response.content,key="predicted_type")
     else:
         resp = client.chat.completions.create(
             model=model,
@@ -297,13 +308,13 @@ Summary:
            temperature=0.0,
            messages=[{"role": "user", "content": parts}]
        )
-       return resp.content[0].text
+       return extract_predicted_value(resp.content[0].text,key="predicted_priority")
     elif model == "grok-4":
         from xai_sdk.chat import user 
         chat = client.chat.create(model=model, temperature=0)
         chat.append(user(prompt))
         response = chat.sample()
-        return response.content
+        return extract_predicted_value(response.content,key="predicted_priority")
     else:
         resp = client.chat.completions.create(
             model=model,
@@ -334,18 +345,18 @@ def main():
             raise ValueError("CSV must contain 'content' and 'issue_id' columns.")
     
     if args.model == "gpt-4o":
-        os.getenv("OPENAI_API_KEY")
         client = OpenAI()
     elif args.model == "claude-3-5-sonnet-latest":
-        os.getenv("ANTHROPIC_API_KEY")
         client = anthropic.Anthropic()
-    elif args.model == "gemini-1.5-pro-latest": #gemini-2.0-flash":
+    elif args.model == "gemini-2.0-flash": #"gemini-1.5-pro-latest"
         client = OpenAI(api_key=os.environ["GOOGLE_API_KEY"], base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
     elif args.model == "grok-4":
         from xai_sdk import Client
         client = Client(api_key=os.environ["XAI_API_KEY"])
-    elif args.model == "llama3-70b":
-        client = OpenAI(api_key=os.environ["GROQ_API_KEY"])
+    elif args.model == "llama3-70b-8192":
+        client = Groq()
+    elif args.model == "deepseek-chat":
+        client = OpenAI(api_key=os.environ["DEEPSEEK_API_KEY"], base_url="https://api.deepseek.com/v1")
 
     summaries, types, priorities = [], [], []
 

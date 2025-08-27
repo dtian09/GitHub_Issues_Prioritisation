@@ -7,8 +7,7 @@ Summarization + (Type, Priority) classification with cosine similarity,
 
 all models called via OpenAI-compatible Chat Completions:
 
-python multi_models_issue_summarizer_single_issue.py --input issue_id_549374190.txt --output predictions.csv --models llama3-70b
-
+python multi_models_issue_summarizer_single_issue.py --input issue_id_549374190.txt --output predictions.csv --models gpt-4o grok-4 claude-3-5-sonnet-latest gemini-2.0-flash deepseek-chat llama3-70b-8192
 temperature parameter:
 
 The temperature parameter controls the randomness or creativity of the model's output:
@@ -33,7 +32,6 @@ from openai import OpenAI  # used for ALL models via OpenAI-compatible endpoints
 
 # Import local helper utilities from user's file
 from summarize_label_types_priorities_single_issue_input import (
-    clamp_words,
     clean_and_detect_closed,
     SUMMARIZE_GUARDRAILS,
     TYPE_LABELS, TYPE_CONTEXT,
@@ -59,7 +57,7 @@ def extract_json(text: str) -> Optional[dict]:
         return json.loads(m.group(0))
     except Exception:
         return None
-
+'''
 def snap_to_allowed(label: str, allowed: list) -> str:
     if not label:
         return "Unknown"
@@ -71,7 +69,7 @@ def snap_to_allowed(label: str, allowed: list) -> str:
         if low in a.lower() or a.lower() in low:
             return a
     return "Unknown"
-
+'''
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     denom = (np.linalg.norm(a) * np.linalg.norm(b))
     if denom == 0:
@@ -118,48 +116,6 @@ Return ONLY JSON exactly like:
 Summary:
 \"\"\"{summary}\"\"\"""".strip()
 
-# ---------- OpenAI-style sender ----------
-SenderFn = Callable[[str, str, str, float, int, bool], str]
-
-def make_openai_style_sender(api_key: str, base_url: Optional[str] = None) -> SenderFn:
-    if not api_key:
-        raise RuntimeError("Missing API key for OpenAI-style sender.")
-    client = OpenAI(api_key=api_key, base_url=base_url) if base_url else OpenAI(api_key=api_key)
-
-    def _send(model_name: str, system: str, user: str, temperature: float, max_tokens: int, json_mode: bool) -> str:
-        kwargs = {}
-        if json_mode:
-            kwargs["response_format"] = {"type": "json_object"}
-        resp = client.chat.completions.create(
-            model=model_name,
-            messages=[{"role":"system","content":system},{"role":"user","content":user}],
-            temperature=temperature,
-            max_tokens=max_tokens,
-            **kwargs
-        )
-        return (resp.choices[0].message.content or "").strip()
-    return _send
-
-# ---------- generic summarizer/classifiers ----------
-def summarize_with(sender: SenderFn, model: str, text: str, temperature: float = 0.2) -> str:
-    sys, usr = build_summary_prompt(text)
-    out = sender(model, sys, usr, temperature, 160, False)
-    return clamp_words(out, 40)
-
-def classify_issue_type(sender: SenderFn, model: str, summary_40w: str):
-    sys = "You are a strict JSON-only classifier."
-    raw = sender(model, sys, build_type_prompt(summary_40w), 0.0, 200, True)
-    data = extract_json(raw) or {}
-    label = snap_to_allowed(data.get("predicted_type",""), TYPE_LABELS)
-    return label
-
-def classify_issue_priority(sender: SenderFn, model: str, summary_40w: str):
-    sys = "You are a strict JSON-only classifier."
-    raw = sender(model, sys, build_priority_prompt(summary_40w), 0.0, 200, True)
-    data = extract_json(raw) or {}
-    label = snap_to_allowed(data.get("predicted_priority",""), PRIORITY_LABELS)
-    return label
-
 # ---------- main orchestration ----------
 def parse_args():
     p = argparse.ArgumentParser(description="Summarize + classify issues via OpenAI-style API for ALL Models.")
@@ -167,8 +123,8 @@ def parse_args():
     p.add_argument("--output", default="results_openai_only.csv")
     p.add_argument("--temperature", type=float, default=0.2)
     p.add_argument("--models", nargs="+",
-                   default=["gpt-4o","claude3-opus","gemini-2.5-pro","grok-4","llama3-70b", "deepseek-v2"],
-                   help="Subset of: gpt-4o claude3-opus gemini-2.5-pro grok-4 llama3-70b deepseek-v2")
+                   default=["gpt-4o","claude-3-5-sonnet-latest","gemini-2.0-flash","grok-4","llama3-70b-8192", "deepseek-chat"],
+                   help="Subset of: gpt-4o claude-3-5-sonnet-latest gemini-2.0-flash grok-4 llama3-70b-8192 deepseek-chat")
     return p.parse_args()
 
 
@@ -181,73 +137,70 @@ def main():
     with open(args.input, "r", encoding="utf-8") as f:
         content = f.read().strip()
 
+    # Use summarize_label_types_priorities_single_issue_input.py functions
+    from summarize_label_types_priorities_single_issue_input import summarize_40w, label_type, label_priority
+    import anthropic
+    from groq import Groq
+
     st_model = SentenceTransformer("all-MiniLM-L6-v2")
     emb_content = st_model.encode([content], normalize_embeddings=True)[0]
 
-    models_map: Dict[str, Tuple[SenderFn, str]] = {}
-
-    if "gpt-4o" in args.models:
-        models_map["gpt-4o"] = (
-            make_openai_style_sender(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_BASE_URL")),
-            "gpt-4o"
-        )
-    if "claude3-opus" in args.models:
-        models_map["claude3-opus"] = (
-            make_openai_style_sender(api_key=os.getenv("CLAUDE_API_KEY"), base_url=os.getenv("CLAUDE_BASE_URL")),
-            "claude-3-opus"
-        )
-    if "gemini-2.5-pro" in args.models:
-        models_map["gemini-2.5-pro"] = (
-            make_openai_style_sender(api_key=os.getenv("GOOGLE_API_KEY"), base_url=os.getenv("GEMINI_BASE_URL")),
-            "gemini-2.5-pro"
-        )
-    if "grok-4" in args.models:
-        models_map["grok-4"] = (
-            make_openai_style_sender(api_key=os.getenv("XAI_API_KEY"), base_url=os.getenv("GROK_BASE_URL")),
-            "grok-4-latest"
-        )
-    if "llama3-70b" in args.models:
-        models_map["llama3-70b"] = (
-            make_openai_style_sender(api_key=os.getenv("GROQ_API_KEY"), base_url=os.getenv("GROQ_BASE_URL")),
-            "llama3-70b-8192"
-        )
-    if "deepseek-v2" in args.models:
-        models_map["deepseek-v2"] = (
-            make_openai_style_sender(api_key=os.getenv("DEEPSEEK_API_KEY"), base_url=os.getenv("DEEPSEEK_BASE_URL")),
-            "deepseek-v2"
-        )
-
     records = []
-    for alias, (sender, model_name) in models_map.items():
-        try:
-            s40 = summarize_with(sender, model_name, content, args.temperature)
-        except Exception:
-            s40 = ""
+    for model in args.models:
+        # Initialize appropriate client for each model
+        if model == "gpt-4o":
+            client = OpenAI()
+        elif model == "claude3-opus" or model == "claude-3-5-sonnet-latest":
+            client = anthropic.Anthropic()
+        elif model == "gemini-2.5-pro" or model == "gemini-2.0-flash":
+            client = OpenAI(api_key=os.environ["GOOGLE_API_KEY"], base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
+        elif model == "grok-4":
+            from xai_sdk import Client
+            client = Client(api_key=os.environ["XAI_API_KEY"])
+        elif model == "llama3-70b" or model == "llama3-70b-8192":
+            client = Groq()
+        elif model == "deepseek-v2" or model == "deepseek-chat":
+            client = OpenAI(api_key=os.environ["DEEPSEEK_API_KEY"], base_url="https://api.deepseek.com/v1")
+        else:
+            client = OpenAI()  # Default to OpenAI
 
         try:
-            t_label, _ = classify_issue_type(sender, model_name, s40) if s40 else ("Unknown", 0.0)
-        except Exception:
-            t_label = "Unknown"
+            # Summarize
+            summary = summarize_40w(content, model, args.temperature, client)
+        except Exception as e:
+            print(f"Error summarizing with {model}: {e}")
+            summary = ""
 
         try:
-            p_label = classify_issue_priority(sender, model_name, s40) if s40 else "Unknown"
-        except Exception:
-            p_label = "Unknown"
+            # Type
+            predicted_type = label_type(summary, model, client) if summary else ""
+        except Exception as e:
+            print(f"Error labeling type with {model}: {e}")
+            predicted_type = ""
 
         try:
-            emb_summary = st_model.encode([s40], normalize_embeddings=True)[0] if s40 else np.zeros_like(emb_content)
+            # Priority
+            predicted_priority = label_priority(summary, model, client) if summary else ""
+        except Exception as e:
+            print(f"Error labeling priority with {model}: {e}")
+            predicted_priority = ""
+
+        # Cosine similarity
+        try:
+            emb_summary = st_model.encode([summary], normalize_embeddings=True)[0] if summary else np.zeros_like(emb_content)
             cos = cosine_similarity(emb_summary, emb_content)
         except Exception:
             cos = 0.0
 
         records.append({
-            "Model": alias,
-            "Summary_40w": s40,
-            "Predicted Type": t_label,
-            "Predicted Priority": p_label,
+            "Model": model,
+            "Summary_40w": summary,
+            "Predicted Type": predicted_type,
+            "Predicted Priority": predicted_priority,
             "Cosine_Similarity_Score(Summary, Content)": round(cos, 2),
         })
 
+    # Save output
     pd.DataFrame.from_records(records).to_csv(args.output, index=False)
     print(f"Done. Wrote {args.output}")
 
