@@ -7,7 +7,8 @@ Summarization + (Type, Priority) classification with cosine similarity,
 
 all models called via OpenAI-compatible Chat Completions:
 
-python multi_models_issue_summarizer_single_issue.py --input issue_id_549374190.txt --output predictions.csv --models gpt-4o grok-4 claude-3-5-sonnet-latest gemini-2.0-flash deepseek-chat llama3-70b-8192
+python multi_models_issue_summarizer_single_issue.py --input "C:/Users/dtian/GitHub_Issues_Prioritisation/longest_issues/issue_id_941150350.txt" --output C:/Users/dtian/GitHub_Issues_Prioritisation/longest_issues/predictions_941150350.csv --log-cleaned --models claude-3-5-sonnet-latest gemini-2.0-flash deepseek-chat llama-3.3-70b-versatile gpt-4o grok-4
+
 temperature parameter:
 
 The temperature parameter controls the randomness or creativity of the model's output:
@@ -21,11 +22,10 @@ Install:
   pip install openai sentence-transformers pandas tqdm python-dotenv numpy
 """
 import os, re, json, argparse
-from typing import Dict, Tuple, Callable, Optional
+from typing import Optional
 
 import pandas as pd
 import numpy as np
-from tqdm import tqdm
 from dotenv import load_dotenv
 
 from openai import OpenAI  # used for ALL models via OpenAI-compatible endpoints
@@ -33,6 +33,7 @@ from openai import OpenAI  # used for ALL models via OpenAI-compatible endpoints
 # Import local helper utilities from user's file
 from summarize_label_types_priorities_single_issue_input import (
     clean_and_detect_closed,
+    count_tokens,
     SUMMARIZE_GUARDRAILS,
     TYPE_LABELS, TYPE_CONTEXT,
     PRIORITY_LABELS, PRIORITY_CONTEXT
@@ -41,6 +42,9 @@ from summarize_label_types_priorities_single_issue_input import (
 from sentence_transformers import SentenceTransformer
 
 load_dotenv(override=True)
+
+# Disable OpenTelemetry to avoid connection errors
+os.environ["OTEL_SDK_DISABLED"] = "true"
 
 # ---------- helpers ----------
 def extract_json(text: str) -> Optional[dict]:
@@ -122,6 +126,8 @@ def parse_args():
     p.add_argument("--input", required=True, help="CSV with at least a 'content' column.")
     p.add_argument("--output", default="results_openai_only.csv")
     p.add_argument("--temperature", type=float, default=0.2)
+    p.add_argument("--log-cleaned", action="store_true",
+                   help="If set, save cleaned issue texts into cleaned_issues.log")
     p.add_argument("--models", nargs="+",
                    default=["gpt-4o","claude-3-5-sonnet-latest","gemini-2.0-flash","grok-4","llama3-70b-8192", "deepseek-chat"],
                    help="Subset of: gpt-4o claude-3-5-sonnet-latest gemini-2.0-flash grok-4 llama3-70b-8192 deepseek-chat")
@@ -134,8 +140,21 @@ def main():
         raise FileNotFoundError(f"Missing input file: {args.input}")
 
     # Read plain text from file (1 issue only)
-    with open(args.input, "r", encoding="utf-8") as f:
-        content = f.read().strip()
+    try:
+        with open(args.input, "r", encoding="utf-8") as f:
+            content = f.read().strip()
+    except UnicodeDecodeError:
+        # Try different encodings if UTF-8 fails
+        for encoding in ["utf-16", "utf-16-le", "utf-16-be", "latin-1", "cp1252"]:
+            try:
+                with open(args.input, "r", encoding=encoding) as f:
+                    content = f.read().strip()
+                print(f"[INFO] Successfully read file using {encoding} encoding")
+                break
+            except UnicodeDecodeError:
+                continue
+        else:
+            raise UnicodeDecodeError("Unable to decode file with any common encoding")
 
     # Use summarize_label_types_priorities_single_issue_input.py functions
     from summarize_label_types_priorities_single_issue_input import summarize_40w, label_type, label_priority
@@ -144,11 +163,15 @@ def main():
 
     st_model = SentenceTransformer("all-MiniLM-L6-v2")
     emb_content = st_model.encode([content], normalize_embeddings=True)[0]
+    
+    # Get cleaned content word count for tracking
+    cleaned_content, _ = clean_and_detect_closed(content, log=args.log_cleaned)
+    cleaned_content_word_count = count_tokens(cleaned_content)
 
     records = []
     for model in args.models:
         # Initialize appropriate client for each model
-        if model == "gpt-4o":
+        if model == "gpt-4o" or model == "gpt-5":
             client = OpenAI()
         elif model == "claude3-opus" or model == "claude-3-5-sonnet-latest":
             client = anthropic.Anthropic()
@@ -157,19 +180,15 @@ def main():
         elif model == "grok-4":
             from xai_sdk import Client
             client = Client(api_key=os.environ["XAI_API_KEY"])
-        elif model == "llama3-70b" or model == "llama3-70b-8192":
+        elif model == "llama-3.3-70b-versatile":
             client = Groq()
         elif model == "deepseek-v2" or model == "deepseek-chat":
             client = OpenAI(api_key=os.environ["DEEPSEEK_API_KEY"], base_url="https://api.deepseek.com/v1")
         else:
-            client = OpenAI()  # Default to OpenAI
+            import sys
+            sys.exit(f"Unknown model: {model}")
 
-        try:
-            # Summarize
-            summary = summarize_40w(content, model, args.temperature, client)
-        except Exception as e:
-            print(f"Error summarizing with {model}: {e}")
-            summary = ""
+        summary = summarize_40w(content, model, args.temperature, client, log=args.log_cleaned, count_tokens_flag=False)      
 
         try:
             # Type
@@ -197,7 +216,8 @@ def main():
             "Summary_40w": summary,
             "Predicted Type": predicted_type,
             "Predicted Priority": predicted_priority,
-            "Cosine_Similarity_Score(Summary, Content)": round(cos, 2),
+            "Cosine_Similarity_Score(Summary, Cleaned Content)": round(cos, 2),
+            "Cleaned_Content_Word_Count": cleaned_content_word_count,
         })
 
     # Save output

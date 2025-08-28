@@ -7,9 +7,11 @@ from tqdm import tqdm
 from dotenv import load_dotenv
 from openai import OpenAI
 import json
+'''
 
-#python summarize_label_types_priorities_single_issue_input.py --input issue_id_549374190.txt --output issue549374190_prediction.txt --log-cleaned
+python summarize_label_types_priorities_single_issue_input.py --input "C:/Users/dtian/GitHub_Issues_Prioritisation/longest_issues/issue_id_354702553.txt" --output prediction.txt --model claude-3-opus-20240229 --log-cleaned
 
+'''
 SUMMARIZE_GUARDRAILS = (
     "Context: summaries will be used for type/priority classification.\n"
     "Grounding Rules:\n"
@@ -82,13 +84,19 @@ def parse_args():
     p.add_argument("--temp",   type=float, default=float(os.getenv("TEMPERATURE", "0.2")))
     p.add_argument("--log-cleaned", action="store_true",
                    help="If set, save cleaned issue texts into cleaned_issues.log")
+    p.add_argument("--count-tokens", action="store_true",
+                   help="If set, count and display tokens in cleaned data")
     return p.parse_args()
 
 def clamp_words(text: str, k: int) -> str:
     toks = WORD_RE.findall(text or "")
     return " ".join(toks[:k])
 
-def clean_and_detect_closed(text: str, log: bool = False):
+def count_tokens(text: str) -> int:
+    """Count tokens using a simple word-based approach."""
+    return len(WORD_RE.findall(text or ""))
+
+def clean_and_detect_closed(text: str, log: bool = False, count_tokens_flag: bool = False):
     """
     Remove helper tags, detect <issue_closed>, and normalize non-conversational content
     by replacing it with placeholders so summarization/classification stays focused.
@@ -170,65 +178,208 @@ def clean_and_detect_closed(text: str, log: bool = False):
     # --- Log-like lines (timestamps, log levels) ---
     s = re.sub(r"(?m)^\s*(?:\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?|\d{2}:\d{2}:\d{2}|INFO|WARN|WARNING|DEBUG|ERROR)\b.*$", "[LOG_LINE]", s)
 
+    # --- Clean table/markdown formatting characters ---
+    # Remove table separators like | ------- | ---------------\ 
+    s = re.sub(r"\|\s*-+\s*\\?\s*\|?", "", s)
+    s = re.sub(r"\|\s*-+\s*\\?\s*", "", s)
+    
+    # Remove empty markdown link/image syntax []()
+    s = re.sub(r"\[\]\(\)", "", s)
+    
+    # Remove :x: emoji pattern
+    s = re.sub(r":x:", "", s)
+    
+    # Clean up remaining table pipes and markdown artifacts
+    s = re.sub(r"\|\s*\|", "", s)  # Remove empty table cells
+    s = re.sub(r"^\s*\|\s*", "", s, flags=re.MULTILINE)  # Remove leading pipes
+    s = re.sub(r"\s*\|\s*$", "", s, flags=re.MULTILINE)  # Remove trailing pipes
+
     # Collapse repeated placeholders
     s = re.sub(r"(?:\[CODE_BLOCK\]\s*){2,}", "[CODE_BLOCK] ", s)
     s = re.sub(r"(?:\[STACK_TRACE(?:_LINE)?\]\s*){2,}", "[STACK_TRACE] ", s)
     s = re.sub(r"(?:\[LOG_LINE\]\s*){2,}", "[LOG_LINE] ", s)
     s = re.sub(r"(?:\[ENV_INFO_LINE\]\s*){2,}", "[ENV_INFO_LINE] ", s)
 
+    # --- Replace repeated patterns with counts ---
+    def replace_repeated_patterns(text):
+        """Replace sequences of the same pattern separated by delimiters with a count."""
+        # Split text into tokens
+        tokens = text.split()
+        if len(tokens) <= 1:
+            return text
+        
+        result = []
+        i = 0
+        while i < len(tokens):
+            current_token = tokens[i]
+            count = 1
+            
+            # Count consecutive occurrences of the same token
+            j = i + 1
+            while j < len(tokens) and tokens[j] == current_token:
+                count += 1
+                j += 1
+            
+            # If we found repetitions, replace with count notation
+            if count > 2:  # Only replace if there are more than 2 occurrences
+                result.append(f"{current_token}(x{count})")
+            else:
+                # Add tokens individually if not enough repetitions
+                for k in range(count):
+                    result.append(current_token)
+            
+            i = j
+        
+        return " ".join(result)
+    
+    s = replace_repeated_patterns(s)
+
+    # --- Replace non-English characters ---
+    def replace_non_english_chars(text):
+        """Replace sequences of non-English characters with a note."""
+        # Define pattern for non-ASCII characters (outside basic English)
+        non_english_pattern = r'[^\x00-\x7F]+'
+        
+        # Find all non-English character sequences
+        matches = re.findall(non_english_pattern, text)
+        if matches:
+            # Replace all non-English character sequences with a note
+            text = re.sub(non_english_pattern, '[NON_ENGLISH_CHARS]', text)
+        
+        return text
+    
+    s = replace_non_english_chars(s)
+
     # Final whitespace normalize
-    s = re.sub(r"\s+", " ", s).strip()
+    s = re.sub(r"\s+", " ", s).strip()      
     
     if log:
         try:
-            with open("cleaned_issues.log", "a", encoding="utf-8") as f:
+            with open("cleaned_issues.log", "w", encoding="utf-8") as f:
                 f.write(s + "\n---\n")
+                token_count = count_tokens(s)
+                f.write(f"[INFO] Token count in cleaned data: {token_count}")
         except Exception as e:
             print(f"[WARN] Could not log cleaned text: {e}")
 
     return s, is_closed
 
-
-def summarize_40w(raw_text: str, model: str, temperature: float, client: OpenAI, log: bool = False) -> str:
-    cleaned, is_closed = clean_and_detect_closed(raw_text, log=log)
-    sys = (
-        "You are a concise technical writing assistant for software issues. "
-        "Produce grounded, non-speculative summaries that strictly follow the rules below.\n\n"
-        + SUMMARIZE_GUARDRAILS
-    )    
-    hint = " The issue is CLOSED; explicitly say it is closed." if is_closed else ""
-    user = (
-        f"Summarize the following GitHub issue in EXACTLY 40 words.{hint} "
-        "No preamble, numbering, or quotes. Focus on the core problem and requested action.\n\n"
-        f"--- ISSUE TEXT START ---\n{cleaned}\n--- ISSUE TEXT END ---"
-    )
-
+def make_llm_call(prompt: str, system_msg: str, model: str, temperature: float, client: OpenAI, max_tokens: int = 160) -> str:
+    """Helper function to make LLM calls with consistent interface across different models."""
     if model == "claude-3-5-sonnet-latest":
-        parts = [{"type": "text", "text": user}]
+        parts = [{"type": "text", "text": prompt}]
         resp = client.messages.create(
             model=model,
-            max_tokens=160,
-            system=sys,
+            max_tokens=max_tokens,
+            system=system_msg,
             temperature=temperature,
             messages=[{"role": "user", "content": parts}]
         )
-        out = "".join([block.text for block in resp.content])
+        return "".join([block.text for block in resp.content])
     elif model == "grok-4":
-        prompt=user
         from xai_sdk.chat import user, system
-        chat = client.chat.create(model=model, temperature=0)
-        chat.append(system(sys))
+        chat = client.chat.create(model=model, temperature=temperature)
+        chat.append(system(system_msg))
         chat.append(user(prompt))
         response = chat.sample()
-        out = response.content        
+        return response.content        
     else:        
         resp = client.chat.completions.create(
-        model=model,
-        messages=[{"role":"system","content":sys},{"role":"user","content":user}],
-        temperature=temperature,
-        max_tokens=160
+            model=model,
+            messages=[{"role":"system","content":system_msg},{"role":"user","content":prompt}],
+            temperature=temperature,
+            max_tokens=max_tokens
         )
-        out = (resp.choices[0].message.content or "").strip()
+        return (resp.choices[0].message.content or "").strip()
+
+
+def summarize_40w(raw_text: str, model: str, temperature: float, client: OpenAI, log: bool = False, count_tokens_flag: bool = False) -> str:
+    cleaned, is_closed = clean_and_detect_closed(raw_text, log=log, count_tokens_flag=count_tokens_flag)
+    
+    # Check if content is too large (>= 20k tokens)
+    token_count = count_tokens(cleaned)
+    
+    if token_count >= 20000:
+        # Split content into roughly equal parts
+        words = cleaned.split()
+        total_words = len(words)
+
+        # Calculate number of chunks (aim for ~20k tokens per chunk to be safe)
+        num_chunks = max(2, (token_count // 20000) + 1)
+        words_per_chunk = total_words // num_chunks
+        
+        chunks = []
+        for i in range(num_chunks):
+            start_idx = i * words_per_chunk
+            if i == num_chunks - 1:  # Last chunk gets remaining words
+                end_idx = total_words
+            else:
+                end_idx = (i + 1) * words_per_chunk
+            
+            chunk = " ".join(words[start_idx:end_idx])
+            chunks.append(chunk)
+        
+        # Summarize each chunk
+        chunk_summaries = []
+        sys_chunk = (
+            "You are a technical writing assistant. Summarize the following GitHub issue content section "
+            "in 20-30 words. Focus on key problems, errors, and requested actions. "
+            "Be factual and concise.\n\n" + SUMMARIZE_GUARDRAILS
+        )
+        
+        for i, chunk in enumerate(chunks):
+            user_chunk = (
+                f"Summarize this section ({i+1}/{num_chunks}) of a GitHub issue in 20-30 words. "
+                "Focus on the main problems and actions mentioned:\n\n"
+                f"--- SECTION START ---\n{chunk}\n--- SECTION END ---"
+            )
+            
+            try:
+                chunk_summary = make_llm_call(user_chunk, sys_chunk, model, temperature, client, max_tokens=120)
+                chunk_summaries.append(chunk_summary.strip())
+            except Exception:
+                chunk_summaries.append(f"[Error summarizing section {i+1}]")
+        
+        # Merge chunk summaries into final summary
+        merged_content = " ".join(chunk_summaries)
+        
+        sys_final = (
+            "You are a concise technical writing assistant for software issues. "
+            "Merge the following section summaries into a single coherent 40-word summary.\n\n"
+            + SUMMARIZE_GUARDRAILS
+        )
+        hint = " The issue is CLOSED; explicitly say it is closed." if is_closed else ""
+        user_final = (
+            f"Merge these section summaries into EXACTLY 40 words.{hint} "
+            "Create a coherent summary focusing on the main problem and requested action:\n\n"
+            f"--- SECTION SUMMARIES ---\n{merged_content}\n--- END SUMMARIES ---"
+        )
+        
+        try:
+            out = make_llm_call(user_final, sys_final, model, temperature, client, max_tokens=160)
+        except Exception:
+            # Fallback: truncate merged content if final summarization fails
+            out = clamp_words(merged_content, 40)
+            
+    else:
+        # Original logic for content < 20k tokens
+        sys = (
+            "You are a concise technical writing assistant for software issues. "
+            "Produce grounded, non-speculative summaries that strictly follow the rules below.\n\n"
+            + SUMMARIZE_GUARDRAILS
+        )    
+        hint = " The issue is CLOSED; explicitly say it is closed." if is_closed else ""
+        user = (
+            f"Summarize the following GitHub issue in EXACTLY 40 words.{hint} "
+            "No preamble, numbering, or quotes. Focus on the core problem and requested action.\n\n"
+            f"--- ISSUE TEXT START ---\n{cleaned}\n--- ISSUE TEXT END ---"
+        )
+        
+        try:
+            out = make_llm_call(user, sys, model, temperature, client, max_tokens=160)
+        except Exception:
+            out = ""
+
     return clamp_words(out, 40)
 
 def extract_predicted_value(text: str, key: str = "predicted_type") -> str:
@@ -300,7 +451,7 @@ Return ONLY JSON in this format:
 
 Summary:
 \"\"\"{summary}\"\"\""""
-    if model == "claude-3-5-sonnet-latest":
+    if model == "claude-3-5-sonnet-latest" or model == "claude-opus-4-20250514":
        parts = [{"type": "text", "text": prompt}]
        resp = client.messages.create(
            model=model,
@@ -344,25 +495,28 @@ def main():
         if "content" not in df.columns or "issue_id" not in df.columns:
             raise ValueError("CSV must contain 'content' and 'issue_id' columns.")
     
-    if args.model == "gpt-4o":
+    if args.model == "gpt-4o" or args.model == "gpt-5":
         client = OpenAI()
-    elif args.model == "claude-3-5-sonnet-latest":
+    elif args.model == "claude-3-5-sonnet-latest" or args.model == "claude-opus-4-20250514":
         client = anthropic.Anthropic()
     elif args.model == "gemini-2.0-flash": #"gemini-1.5-pro-latest"
         client = OpenAI(api_key=os.environ["GOOGLE_API_KEY"], base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
     elif args.model == "grok-4":
         from xai_sdk import Client
         client = Client(api_key=os.environ["XAI_API_KEY"])
-    elif args.model == "llama3-70b-8192":
+    elif args.model == "llama-3.3-70b-versatile":
         client = Groq()
     elif args.model == "deepseek-chat":
         client = OpenAI(api_key=os.environ["DEEPSEEK_API_KEY"], base_url="https://api.deepseek.com/v1")
+    else:
+        import sys
+        sys.exit(f"Unknown model: {args.model}")
 
     summaries, types, priorities = [], [], []
 
     for text in tqdm(df["content"].fillna("").astype(str), desc="Summarize + label"):
         try:
-            s40 = summarize_40w(text, args.model, args.temp, client, log=args.log_cleaned)
+            s40 = summarize_40w(text, args.model, args.temp, client, log=args.log_cleaned, count_tokens_flag=args.count_tokens)
         except Exception:
             s40 = ""
         summaries.append(s40)
