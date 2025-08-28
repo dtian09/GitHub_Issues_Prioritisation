@@ -15,12 +15,24 @@ issue_ids = [1148298434, # Shortest issue
             1097457670]
 '''
 
-issue_ids = [ #longest issues
-    941150350,
-    354702553,
-    237734712,
-    315565490
-    ]
+#issue_ids = [ #longest issues
+#    941150350,
+#    354702553,
+#    237734712,
+#    315565490
+#    ]
+
+issue_ids = [ 1593724,
+               4796196,
+               5049130,
+               5090989,
+               5229008,
+               6365768,
+               6628733,
+               7588792,
+               8390031,
+               8878207
+            ]
 
 # Connect to MySQL
 conn = mysql.connector.connect(
@@ -31,7 +43,8 @@ conn = mysql.connector.connect(
 )
 cursor = conn.cursor()
 #destination_dir = "/mnt/c/users/dtian/GitHub_Issues_Prioritisation/shortest_issues/"
-destination_dir = "/mnt/c/users/dtian/GitHub_Issues_Prioritisation/longest_issues/"
+#destination_dir = "/mnt/c/users/dtian/GitHub_Issues_Prioritisation/longest_issues/"
+destination_dir = "/mnt/c/users/dtian/GitHub_Issues_Prioritisation/random_issues2/"
 
 for issue_id in issue_ids:
     # Define output file path (must match secure_file_priv dir)

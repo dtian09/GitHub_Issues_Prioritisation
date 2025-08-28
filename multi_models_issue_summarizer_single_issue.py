@@ -7,7 +7,7 @@ Summarization + (Type, Priority) classification with cosine similarity,
 
 all models called via OpenAI-compatible Chat Completions:
 
-python multi_models_issue_summarizer_single_issue.py --input "C:/Users/dtian/GitHub_Issues_Prioritisation/longest_issues/issue_id_941150350.txt" --output C:/Users/dtian/GitHub_Issues_Prioritisation/longest_issues/predictions_941150350.csv --log-cleaned --models claude-3-5-sonnet-latest gemini-2.0-flash deepseek-chat llama-3.3-70b-versatile gpt-4o grok-4
+python multi_models_issue_summarizer_single_issue.py --input "C:/Users/dtian/GitHub_Issues_Prioritisation/random_issues2/issue_id_7588792.txt" --output C:/Users/dtian/GitHub_Issues_Prioritisation/random_issues2/predictions_7588792.csv --models gpt-4o grok-4 claude-3-5-sonnet-latest gemini-2.0-flash deepseek-chat llama-3.3-70b-versatile
 
 temperature parameter:
 
@@ -61,19 +61,6 @@ def extract_json(text: str) -> Optional[dict]:
         return json.loads(m.group(0))
     except Exception:
         return None
-'''
-def snap_to_allowed(label: str, allowed: list) -> str:
-    if not label:
-        return "Unknown"
-    low = label.strip().lower()
-    by_lower = {a.lower(): a for a in allowed}
-    if low in by_lower:
-        return by_lower[low]
-    for a in allowed:
-        if low in a.lower() or a.lower() in low:
-            return a
-    return "Unknown"
-'''
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     denom = (np.linalg.norm(a) * np.linalg.norm(b))
     if denom == 0:
