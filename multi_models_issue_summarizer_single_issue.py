@@ -7,7 +7,7 @@ Summarization + (Type, Priority) classification with cosine similarity,
 
 all models called via OpenAI-compatible Chat Completions:
 
-python multi_models_issue_summarizer_single_issue.py --input "C:/Users/dtian/GitHub_Issues_Prioritisation/random_issues2/issue_id_7588792.txt" --output C:/Users/dtian/GitHub_Issues_Prioritisation/random_issues2/predictions_7588792.csv --models gpt-4o grok-4 claude-3-5-sonnet-latest gemini-2.0-flash deepseek-chat llama-3.3-70b-versatile
+python multi_models_issue_summarizer_single_issue.py --input "C:/Users/dtian/GitHub_Issues_Prioritisation/shortest_issues/issue_id_705332485.txt" --output C:/Users/dtian/GitHub_Issues_Prioritisation/shortest_issues/predictions_705332485.csv --models gpt-4o grok-4 claude-3-5-sonnet-latest gemini-2.0-flash deepseek-chat llama-3.3-70b-versatile
 
 temperature parameter:
 

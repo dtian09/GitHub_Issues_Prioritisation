@@ -9,7 +9,7 @@ from openai import OpenAI
 import json
 '''
 
-python summarize_label_types_priorities_single_issue_input.py --input "C:/Users/dtian/GitHub_Issues_Prioritisation/longest_issues/issue_id_354702553.txt" --output prediction.txt --model claude-3-opus-20240229 --log-cleaned
+python summarize_label_types_priorities_single_issue_input.py --input "C:/Users/dtian/GitHub_Issues_Prioritisation/shortest_issues/issue_id_705332485.txt" --output prediction.txt --model claude-3-5-sonnet-latest --log-cleaned
 
 '''
 SUMMARIZE_GUARDRAILS = (
