@@ -2,8 +2,7 @@
 """
 batch_process_issues.py
 
-Process all .txt files in the shortest_issues folder using multi_models_issue_summarizer_single_issue.py
-with all available LLMs.
+Use all LLMs to summarize the issues in the .txt files of the input_folder and label their types and priorities by calling multi_models_issue_summarizer_single_issue.py
 
 Usage:
 python batch_process_issues.py

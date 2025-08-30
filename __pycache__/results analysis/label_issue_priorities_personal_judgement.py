@@ -128,9 +128,9 @@ def label_issue_priorities():
     
     # Define directories to process
     directories = [
-        "longest_issues",
-        "shortest_issues", 
-        "random_issues"
+        "../longest_issues",
+        "../shortest_issues", 
+        "../random_issues"
     ]
     
     total_files_processed = 0

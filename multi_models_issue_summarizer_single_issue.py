@@ -31,7 +31,7 @@ from dotenv import load_dotenv
 from openai import OpenAI  # used for ALL models via OpenAI-compatible endpoints
 
 # Import local helper utilities from user's file
-from summarize_label_types_priorities_single_issue_input import (
+from summarize_label_types_priorities_single_issue import (
     clean_and_detect_closed,
     count_tokens,
     SUMMARIZE_GUARDRAILS,
@@ -144,7 +144,7 @@ def main():
             raise UnicodeDecodeError("Unable to decode file with any common encoding")
 
     # Use summarize_label_types_priorities_single_issue_input.py functions
-    from summarize_label_types_priorities_single_issue_input import summarize_40w, label_type, label_priority
+    from summarize_label_types_priorities_single_issue import summarize_40w, label_type, label_priority
     import anthropic
     from groq import Groq
 

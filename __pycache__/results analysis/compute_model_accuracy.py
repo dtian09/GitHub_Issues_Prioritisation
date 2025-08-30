@@ -12,9 +12,9 @@ def compute_model_accuracy():
     
     # Define directories to process
     directories = [
-        "longest_issues",
-        "shortest_issues", 
-        "random_issues"
+        "C:\\Users\\dtian\\GitHub_Issues_Prioritisation\\longest_issues",
+        "C:\\Users\\dtian\\GitHub_Issues_Prioritisation\\shortest_issues", 
+        "C:\\Users\\dtian\\GitHub_Issues_Prioritisation\\random_issues"
     ]
     
     # Dictionary to store results for each model
