@@ -12,6 +12,10 @@ An AI-powered system for automatically analyzing, summarizing, classifying, and 
 - **Database Integration**: MySQL database for storing and managing issue data
 - **Flexible Pipeline**: Configurable processing with rate limiting and batch operations
 - **Multi-Model Support**: Compare results across different AI models
+- **Batch Processing**: Process multiple issues simultaneously across all models
+- **Performance Analysis**: Built-in accuracy and quality evaluation tools
+- **Comprehensive Validation**: Ground truth comparison and accuracy measurement
+- **Quality Metrics**: Cosine similarity analysis for summary relevance assessment
 
 ## 📁 Project Structure
 
@@ -27,6 +31,12 @@ An AI-powered system for automatically analyzing, summarizing, classifying, and 
 ├── longest_issues/                               # Sample long issues for testing
 ├── random_issues/                                # Sample random issues
 ├── shortest_issues/                              # Sample short issues
+├── results analysis/                             # Model accuracy and analysis tools
+│   ├── compute_model_accuracy.py                # Calculate model prediction accuracy
+│   ├── compute_priority_accuracy.py             # Priority classification accuracy
+│   ├── analyse_cosine_similarity.py             # Summary quality analysis
+│   ├── batch_process_issues.py                  # Batch processing utility
+│   └── compute_token_lengths.py                 # Token count analysis
 └── sample_issue_ids.txt                         # Example issue ID file
 ```
 
@@ -199,18 +209,75 @@ CREATE TABLE issue (
 - Use larger `--batch-size` for better database performance
 - Monitor API usage and adjust `--sleep` accordingly
 
+## 📊 Analysis and Evaluation
+
+The repository includes comprehensive tools for evaluating model performance and analyzing results:
+
+### **Model Accuracy Assessment**
+- **Type Classification Accuracy**: Compare AI predictions against human judgments
+- **Priority Assignment Accuracy**: Evaluate priority classification performance  
+- **Cross-Model Comparison**: Analyze performance differences between AI models
+- **Cosine Similarity Analysis**: Measure summary quality and relevance
+
+### **Analysis Tools**
+```bash
+# Compute overall model accuracy
+python "results analysis/compute_model_accuracy.py"
+
+# Analyze priority classification accuracy
+python "results analysis/compute_priority_accuracy.py"
+
+# Evaluate summary quality via cosine similarity
+python "results analysis/analyse_cosine_similarity.py"
+
+# Batch process multiple issues across all models
+python "results analysis/batch_process_issues.py"
+```
+
+### **Performance Metrics**
+- **Accuracy Scores**: Percentage of correct classifications
+- **Cosine Similarity**: Summary relevance (0.0-1.0 scale)
+- **Token Analysis**: Content length and processing efficiency
+- **Cross-Model Consensus**: Agreement between different AI models
+
 ## 🧪 Testing
 
-The repository includes sample data for testing:
-- `longest_issues/`: Complex, lengthy GitHub issues
-- `random_issues/`: Diverse issue samples  
-- `shortest_issues/`: Brief, simple issues
+The repository includes comprehensive sample data for testing and evaluation:
+- `longest_issues/`: Complex, lengthy GitHub issues with detailed analysis
+- `random_issues/` & `random_issues2/`: Diverse issue samples across different categories
+- `shortest_issues/`: Brief, simple issues for quick testing
 - `sample_issue_ids.txt`: Ready-to-use issue ID list
+- **Prediction Results**: Pre-computed analysis from multiple AI models
+- **Personal Judgments**: Human-labeled ground truth for accuracy evaluation
 
 ```bash
 # Test with sample data
 python pipeline.py --input sample_issue_ids.txt --max-workers 1 --sleep 1.0
 ```
+
+### **Evaluation and Validation**
+
+The repository includes extensive validation capabilities:
+
+```bash
+# Run comprehensive model accuracy analysis
+python "results analysis/compute_model_accuracy.py"
+
+# Evaluate priority classification performance  
+python "results analysis/compute_priority_accuracy.py"
+
+# Analyze summary quality and relevance
+python "results analysis/analyse_cosine_similarity.py"
+
+# Process all models on issue sets for comparison
+python "results analysis/batch_process_issues.py"
+```
+
+**Validation Features:**
+- **Ground Truth Comparison**: Human-labeled data for accuracy measurement
+- **Cross-Model Analysis**: Performance comparison across different AI models
+- **Quality Metrics**: Cosine similarity scores for summary relevance
+- **Comprehensive Reporting**: Detailed accuracy and performance statistics
 
 ## 🤝 Contributing
 
