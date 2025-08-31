@@ -1,4 +1,4 @@
-# GitHub Issues Prioritisation
+# GitHub Issues Summarization, Categorization and Prioritisation
 
 An AI-powered system for automatically analyzing, summarizing, classifying, and prioritizing GitHub issues using large language models (LLMs). This project helps development teams efficiently triage and manage large volumes of GitHub issues by providing intelligent categorization and priority assignment.
 
