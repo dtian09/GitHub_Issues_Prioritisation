@@ -143,7 +143,6 @@ Create a text file with one issue ID per line:
 - **Build Failure**: CI/CD, compilation errors
 - **Investigation**: Root cause analysis
 - **Incident**: Outages, alerts, production issues
-- And more...
 
 ### Priority Levels (10 levels)
 - **Blocker**: Production down, cannot proceed
@@ -168,15 +167,6 @@ Create a text file with one issue ID per line:
 | `--batch-size` | 20 | Database batch size |
 | `--max-workers` | 8 | Parallel processing threads |
 | `--sleep` | 0.25 | Delay between API calls (seconds) |
-
-### Rate Limiting Recommendations
-
-| Model | Max Workers | Sleep | Notes |
-|-------|-------------|-------|-------|
-| **Grok-4** | 1-2 | 1.0 | Conservative for rate limits |
-| **GPT-4o** | 4-8 | 0.25 | Higher rate limits |
-| **Claude** | 2-4 | 0.5 | Moderate limits |
-| **Gemini** | 4-6 | 0.3 | Good throughput |
 
 ## 🗄️ Database Schema
 
@@ -243,12 +233,10 @@ python "results analysis/batch_process_issues.py"
 ## 🧪 Testing
 
 The repository includes comprehensive sample data for testing and evaluation:
-- `longest_issues/`: Complex, lengthy GitHub issues with detailed analysis
-- `random_issues/` & `random_issues2/`: Diverse issue samples across different categories
-- `shortest_issues/`: Brief, simple issues for quick testing
+- `longest_issues/`: The longest issues 
+- `random_issues/`: Randomly selected issues 
+- `shortest_issues/`: The shortest issues
 - `sample_issue_ids.txt`: Ready-to-use issue ID list
-- **Prediction Results**: Pre-computed analysis from multiple AI models
-- **Personal Judgments**: Human-labeled ground truth for accuracy evaluation
 
 ```bash
 # Test with sample data
