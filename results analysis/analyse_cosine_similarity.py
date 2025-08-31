@@ -12,6 +12,13 @@ import numpy as np
 from pathlib import Path
 from collections import defaultdict
 
+# Define directories to search
+base_dir = Path(r"C:\Users\dtian\GitHub_Issues_Prioritisation")
+
+search_dirs = [
+        base_dir / "longest_issues"
+    ]
+
 def get_cosine_scores_from_csv(csv_path):
     """Extract cosine similarity scores from a CSV file."""
     try:
@@ -40,14 +47,8 @@ def get_cosine_scores_from_csv(csv_path):
         print(f"Error reading {csv_path}: {e}")
         return {}
 
-def analyze_cosine_similarity():
+def analyze_cosine_similarity(search_dirs=None):
     """Main function to analyze cosine similarity scores."""
-    base_dir = Path(r"C:\Users\dtian\GitHub_Issues_Prioritisation")
-    
-    # Define directories to search
-    search_dirs = [
-        base_dir / "random_issues"
-    ]
     
     # Collect all CSV files
     csv_files = []
@@ -186,4 +187,4 @@ def analyze_cosine_similarity():
     print(f"\nDetailed results saved to: {output_path}")
 
 if __name__ == "__main__":
-    analyze_cosine_similarity()
+    analyze_cosine_similarity(search_dirs=search_dirs)

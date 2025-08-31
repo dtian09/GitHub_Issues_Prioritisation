@@ -8,8 +8,9 @@ from dotenv import load_dotenv
 from openai import OpenAI
 import json
 '''
+call a LLM to summarize, label type and priority of an issue
 
-python summarize_label_types_priorities_single_issue_input.py --input "C:/Users/dtian/GitHub_Issues_Prioritisation/shortest_issues/issue_id_705332485.txt" --output prediction.txt --model claude-3-5-sonnet-latest --log-cleaned
+python summarize_label_types_priorities_single_issue.py --input "C:/Users/dtian/GitHub_Issues_Prioritisation/longest_issues/issue_id_354702553.txt" --output prediction354702553.txt --model gpt-4o --log-cleaned
 
 '''
 SUMMARIZE_GUARDRAILS = (
@@ -83,7 +84,7 @@ def parse_args():
     p.add_argument("--sleep",  type=float, default=float(os.getenv("RATE_LIMIT_SLEEP", "0.25")))
     p.add_argument("--temp",   type=float, default=float(os.getenv("TEMPERATURE", "0.2")))
     p.add_argument("--log-cleaned", action="store_true",
-                   help="If set, save cleaned issue texts into cleaned_issues.log")
+                   help="If set, save cleaned issue texts into cleaned_issue.log")
     p.add_argument("--count-tokens", action="store_true",
                    help="If set, count and display tokens in cleaned data")
     return p.parse_args()
@@ -250,12 +251,16 @@ def clean_and_detect_closed(text: str, log: bool = False, count_tokens_flag: boo
     
     s = replace_non_english_chars(s)
 
+    # --- Remove backslash characters and asterisk symbols ---
+    s = re.sub(r'\\', '', s)  # Remove all backslash characters
+    s = re.sub(r'\*', '', s)  # Remove all asterisk symbols
+
     # Final whitespace normalize
     s = re.sub(r"\s+", " ", s).strip()      
     
     if log:
         try:
-            with open("cleaned_issues.log", "w", encoding="utf-8") as f:
+            with open("cleaned_issue.log", "w", encoding="utf-8") as f:
                 f.write(s + "\n---\n")
                 token_count = count_tokens(s)
                 f.write(f"[INFO] Token count in cleaned data: {token_count}")

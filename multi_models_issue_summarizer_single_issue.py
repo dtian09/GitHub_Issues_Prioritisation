@@ -7,7 +7,7 @@ Summarization + (Type, Priority) classification with cosine similarity,
 
 all models called via OpenAI-compatible Chat Completions:
 
-python multi_models_issue_summarizer_single_issue.py --input "C:/Users/dtian/GitHub_Issues_Prioritisation/shortest_issues/issue_id_705332485.txt" --output C:/Users/dtian/GitHub_Issues_Prioritisation/shortest_issues/predictions_705332485.csv --models gpt-4o grok-4 claude-3-5-sonnet-latest gemini-2.0-flash deepseek-chat llama-3.3-70b-versatile
+python multi_models_issue_summarizer_single_issue.py --input "C:/Users/dtian/GitHub_Issues_Prioritisation/longest_issues/issue_id_354702553.txt" --output C:/Users/dtian/GitHub_Issues_Prioritisation/longest_issues/predictions_354702553_2.csv --models gpt-4o grok-4 claude-3-5-sonnet-latest gemini-2.0-flash deepseek-chat llama-3.3-70b-versatile
 
 temperature parameter:
 
@@ -114,7 +114,7 @@ def parse_args():
     p.add_argument("--output", default="results_openai_only.csv")
     p.add_argument("--temperature", type=float, default=0.2)
     p.add_argument("--log-cleaned", action="store_true",
-                   help="If set, save cleaned issue texts into cleaned_issues.log")
+                   help="If set, save cleaned issue texts into cleaned_issue.log")
     p.add_argument("--models", nargs="+",
                    default=["gpt-4o","claude-3-5-sonnet-latest","gemini-2.0-flash","grok-4","llama3-70b-8192", "deepseek-chat"],
                    help="Subset of: gpt-4o claude-3-5-sonnet-latest gemini-2.0-flash grok-4 llama3-70b-8192 deepseek-chat")

@@ -6,37 +6,40 @@ An AI-powered system for automatically analyzing, summarizing, classifying, and 
 
 - **Automated Issue Processing**: Bulk processing of GitHub issues from various sources
 - **AI-Powered Analysis**: Uses multiple LLM providers (Grok-4, GPT-4, Claude, Gemini, etc.)
-- **Smart Summarization**: Generates concise 40-word summaries of complex issues
+- **Smart Summarization**: Generates concise 40-word summaries with automatic chunking for large content (>20k tokens)
+- **Advanced Content Cleaning**: Intelligent preprocessing including placeholder replacement, non-English character handling, and pattern compression
 - **Type Classification**: Categorizes issues into 24 different types (Bug, Feature, Task, etc.)
 - **Priority Assignment**: Assigns priority levels from Blocker to Trivial
 - **Database Integration**: MySQL database for storing and managing issue data
 - **Flexible Pipeline**: Configurable processing with rate limiting and batch operations
-- **Multi-Model Support**: Compare results across different AI models
+- **Multi-Model Support**: Compare results across different AI models with cosine similarity analysis
 - **Batch Processing**: Process multiple issues simultaneously across all models
 - **Performance Analysis**: Built-in accuracy and quality evaluation tools
 - **Comprehensive Validation**: Ground truth comparison and accuracy measurement
 - **Quality Metrics**: Cosine similarity analysis for summary relevance assessment
+- **Content Length Analysis**: Token counting and word count tracking for optimization
 
 ## 📁 Project Structure
 
 ```
 ├── pipeline.py                                    # Main processing pipeline
-├── summarize_label_types_priorities_single_issue.py  # Single issue processor
-├── multi_models_issue_summarizer_single_issue.py     # Multi-model comparison
+├── summarize_label_types_priorities_single_issue_input.py # Core single issue processor
+├── multi_models_issue_summarizer_single_issue.py     # Multi-model comparison with metrics
+├── batch_process_issues.py                        # Automated batch processing utility
 ├── database/
 │   ├── create_db.sql                             # Database schema
 │   ├── get_github_issues.py                     # Issue data collection
 │   ├── insert_data_to_db.py                     # Data insertion utilities
 │   └── sql_select_and_save_issues_into_files.py # Data export utilities
-├── longest_issues/                               # Sample long issues for testing
+├── longest_issues/                               # Sample long issues for testing (>20k tokens)
 ├── random_issues/                                # Sample random issues
 ├── shortest_issues/                              # Sample short issues
 ├── results analysis/                             # Model accuracy and analysis tools
 │   ├── compute_model_accuracy.py                # Calculate model prediction accuracy
 │   ├── compute_priority_accuracy.py             # Priority classification accuracy
 │   ├── analyse_cosine_similarity.py             # Summary quality analysis
-│   ├── batch_process_issues.py                  # Batch processing utility
-│   └── compute_token_lengths.py                 # Token count analysis
+│   └── compute_token_lengths.py                 # Token count and content analysis
+├── .env                                          # Environment configuration
 └── sample_issue_ids.txt                         # Example issue ID file
 ```
 
@@ -50,7 +53,7 @@ An AI-powered system for automatically analyzing, summarizing, classifying, and 
 
 2. **Install dependencies:**
    ```bash
-   pip install mysql-connector-python pandas tqdm python-dotenv openai anthropic groq xai-sdk
+   pip install mysql-connector-python pandas tqdm python-dotenv openai anthropic groq xai-sdk sentence-transformers numpy
    ```
 
 3. **Set up MySQL database:**
@@ -77,6 +80,7 @@ An AI-powered system for automatically analyzing, summarizing, classifying, and 
    
    # Optional Settings
    TEMPERATURE=0.2
+   OTEL_SDK_DISABLED=true              # Disable OpenTelemetry
    ```
 
 ## 🎯 Quick Start
@@ -97,14 +101,24 @@ python pipeline.py --input my_issue_ids.txt --model grok-4 --batch-size 10 --max
 ### 2. Process Single Issue
 
 ```bash
-# Analyze a single issue file
-python summarize_label_types_priorities_single_issue.py --input issue_file.txt --model grok-4 --output results.csv
+# Analyze a single issue file with logging
+python summarize_label_types_priorities_single_issue_input.py --input issue_file.txt --model gpt-4o --output results.csv --log-cleaned --count-tokens
 
-# Compare multiple models
-python multi_models_issue_summarizer_single_issue.py --input issue_file.txt
+# Compare multiple models with detailed metrics
+python multi_models_issue_summarizer_single_issue.py --input issue_file.txt --output comparisons.csv --log-cleaned --models gpt-4o claude-3-5-sonnet-latest gemini-2.0-flash grok-4 llama-3.3-70b-versatile deepseek-chat
 ```
 
-### 3. Issue ID File Format
+### 3. Batch Process Multiple Issues
+
+```bash
+# Process all files in a folder with all models
+python batch_process_issues.py
+
+# Custom batch processing
+python multi_models_issue_summarizer_single_issue.py --input "folder/*.txt" --models gpt-4o grok-4 --temperature 0.2
+```
+
+### 4. Issue ID File Format
 
 Create a text file with one issue ID per line:
 ```
@@ -173,10 +187,10 @@ Create a text file with one issue ID per line:
 ```sql
 CREATE TABLE issue (
     issue_id BIGINT PRIMARY KEY,
-    content TEXT DEFAULT NULL,      -- Original issue text
-    summary TEXT DEFAULT NULL,      -- AI-generated 40-word summary
-    type VARCHAR(128) DEFAULT NULL, -- Classified issue type
-    priority VARCHAR(128) DEFAULT NULL -- Assigned priority level
+    content TEXT DEFAULT NULL,           -- Original issue text
+    summary TEXT DEFAULT NULL,           -- AI-generated 40-word summary
+    type VARCHAR(128) DEFAULT NULL,      -- Classified issue type (24 categories)
+    priority VARCHAR(128) DEFAULT NULL  -- Assigned priority level (10 levels)
 );
 ```
 
@@ -185,13 +199,16 @@ CREATE TABLE issue (
 ### Processing Flow
 1. **Issue Reading**: Load issue IDs from text file
 2. **Database Retrieval**: Fetch issue content in bulk
-3. **Parallel Processing**: Process multiple issues concurrently
-4. **Sequential Steps per Issue**: 
+3. **Content Preprocessing**: Advanced cleaning with placeholder replacement, non-English character handling, and pattern compression
+4. **Large Content Handling**: Automatic chunking for content >20k tokens with chunk-and-merge summarization
+5. **Parallel Processing**: Process multiple issues concurrently
+6. **Sequential Steps per Issue**: 
    - Content cleaning and normalization
-   - AI summarization (40 words)
+   - AI summarization (40 words) with chunking support
    - Type classification (depends on summary)
    - Priority assignment (depends on summary)
-5. **Batch Database Updates**: Efficient bulk updates
+   - Quality metrics calculation (cosine similarity)
+7. **Batch Database Updates**: Efficient bulk updates
 
 ### Optimization Tips
 - Start with `--max-workers 1` to avoid rate limits
@@ -221,7 +238,10 @@ python "results analysis/compute_priority_accuracy.py"
 python "results analysis/analyse_cosine_similarity.py"
 
 # Batch process multiple issues across all models
-python "results analysis/batch_process_issues.py"
+python batch_process_issues.py
+
+# Analyze token lengths and content statistics  
+python "results analysis/compute_token_lengths.py"
 ```
 
 ### **Performance Metrics**
@@ -229,13 +249,15 @@ python "results analysis/batch_process_issues.py"
 - **Cosine Similarity**: Summary relevance (0.0-1.0 scale)
 - **Token Analysis**: Content length and processing efficiency
 - **Cross-Model Consensus**: Agreement between different AI models
+- **Processing Speed**: Throughput and performance benchmarks
+- **Content Statistics**: Word count, token count, and length distribution
 
 ## 🧪 Testing
 
 The repository includes comprehensive sample data for testing and evaluation:
-- `longest_issues/`: The longest issues 
-- `random_issues/`: Randomly selected issues 
-- `shortest_issues/`: The shortest issues
+- `longest_issues/`: The longest issues (>20k tokens, tests chunking functionality)
+- `random_issues/`: Randomly selected issues for general testing
+- `shortest_issues/`: The shortest issues (minimal content testing)
 - `sample_issue_ids.txt`: Ready-to-use issue ID list
 
 ```bash
@@ -257,8 +279,11 @@ python "results analysis/compute_priority_accuracy.py"
 # Analyze summary quality and relevance
 python "results analysis/analyse_cosine_similarity.py"
 
-# Process all models on issue sets for comparison
-python "results analysis/batch_process_issues.py"
+# Run all models on issue sets for comparison
+python batch_process_issues.py
+
+# Analyze content length and token distributions
+python "results analysis/compute_token_lengths.py"
 ```
 
 **Validation Features:**
